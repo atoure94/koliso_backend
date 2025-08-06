@@ -1,13 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../users/user.service';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from '../users/user.dto';
 import { User } from '../users/user.entity';
-import { ConflictException } from '@nestjs/common/exceptions/conflict.exception';
 
 @Injectable()
 export class AuthService {
+  private pendingSignups = new Map<string, { dto: CreateUserDto; otp: string; expires: Date }>();
+
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
@@ -32,25 +33,60 @@ export class AuthService {
   }
 
   async signup(createUserDto: CreateUserDto) {
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    // Vérifie si un utilisateur existe déjà avec ce numéro
     try {
-      const user = await this.userService.createUser({
-        ...createUserDto,
+      await this.userService.findOne(createUserDto.phone);
+      throw new ConflictException('Numéro de téléphone déjà utilisé');
+    } catch (err) {
+      // Si NotFoundException, c'est bon, on continue
+      if (!(err instanceof NotFoundException)) throw err;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
+    this.pendingSignups.set(createUserDto.phone, { dto: createUserDto, otp, expires });
+    // Envoie l’OTP par SMS ici
+    console.log(`OTP pour ${createUserDto.phone} : ${otp}`);
+    return { message: 'Vérifiez votre téléphone pour le code OTP.' };
+  }
+
+  async verifyOtp(phone: string, otp: string) {
+    const pending = this.pendingSignups.get(phone);
+    if (!pending || pending.otp !== otp || pending.expires < new Date()) {
+      throw new UnauthorizedException('OTP invalide ou expiré');
+    }
+    // Crée l’utilisateur en base
+    const hashedPassword = await bcrypt.hash(pending.dto.password, 10);
+    let user: User;
+    try {
+      user = await this.userService.createUser({
+        ...pending.dto,
         password: hashedPassword,
       });
-      const payload = { sub: user.id, phone: user.phone };
-      const token = await this.jwtService.signAsync(payload);
-      return {
-        access_token: token,
-        user,
-      };
     } catch (error) {
-      // PostgreSQL unique violation error code is '23505'
       if (error.code === '23505') {
-        console.error('Numéro de téléphone déjà utilisé');
         throw new ConflictException('Numéro de téléphone déjà utilisé');
       }
       throw error;
     }
+    this.pendingSignups.delete(phone);
+    const payload = { sub: user.id, phone: user.phone };
+    const token = await this.jwtService.signAsync(payload);
+    return { access_token: token, user };
   }
+
+  async resendOtp(phone: string) {
+  const pending = this.pendingSignups.get(phone);
+  if (!pending) {
+    throw new UnauthorizedException('Aucune inscription en attente pour ce numéro');
+  }
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 5 * 60 * 1000);
+  pending.otp = otp;
+  pending.expires = expires;
+  this.pendingSignups.set(phone, pending);
+  // Envoie l’OTP par SMS ici
+  console.log(`Nouvel OTP pour ${phone} : ${otp}`);
+  return { message: 'Nouveau code OTP envoyé.' };
+}
 }

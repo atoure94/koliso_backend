@@ -28,6 +28,12 @@ export class User {
   @Column()
   password: string;
 
+  @Column({ nullable: true })
+otpCode?: string;
+
+@Column({ nullable: true })
+otpExpiresAt?: Date;
+
   @ApiProperty({ example: '2024-08-06T12:00:00.000Z' })
   @CreateDateColumn()
   createdAt: Date;

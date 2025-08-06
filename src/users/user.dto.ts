@@ -20,6 +20,9 @@ export class CreateUserDto {
   @IsString()
   @MinLength(6)
   password: string;
+
+  otpCode?: string;
+  otpExpiresAt?: Date;
 }
 
 export class UpdateUserDto {

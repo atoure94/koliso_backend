@@ -46,4 +46,17 @@ export class AuthController {
   async signup(@Body() body: CreateUserDto) {
     return this.authService.signup(body);
   }
+  @Post('verify-otp')
+@ApiOperation({ summary: 'Vérifie le code OTP' })
+@ApiBody({ schema: { example: { phone: '33612345678', otp: '123456' } } })
+async verifyOtp(@Body() body: { phone: string, otp: string }) {
+  return this.authService.verifyOtp(body.phone, body.otp);
+}
+
+@Post('resend-otp')
+@ApiOperation({ summary: 'Renvoyer un nouveau code OTP' })
+@ApiBody({ schema: { example: { phone: '33612345678' } } })
+async resendOtp(@Body() body: { phone: string }) {
+  return this.authService.resendOtp(body.phone);
+}
 }
