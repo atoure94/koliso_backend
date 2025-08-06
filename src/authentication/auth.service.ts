@@ -89,4 +89,28 @@ export class AuthService {
   console.log(`Nouvel OTP pour ${phone} : ${otp}`);
   return { message: 'Nouveau code OTP envoyé.' };
 }
+
+async forgotPassword(phone: string) {
+  const user = await this.userService.findOne(phone);
+  if (!user) throw new NotFoundException('Aucun utilisateur avec ce numéro');
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 5 * 60 * 1000);
+  // Stocke l’OTP et l’expiration (en mémoire ou en base, ici en mémoire pour démo)
+  this.pendingSignups.set(phone, { dto: { ...user, password: '' }, otp, expires });
+  // Envoie l’OTP par SMS ici
+  console.log(`OTP reset pour ${phone} : ${otp}`);
+  return { message: 'Un code OTP a été envoyé pour réinitialiser le mot de passe.' };
+}
+
+async resetPassword(phone: string, otp: string, newPassword: string) {
+  const pending = this.pendingSignups.get(phone);
+  if (!pending || pending.otp !== otp || pending.expires < new Date()) {
+    throw new UnauthorizedException('OTP invalide ou expiré');
+  }
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await this.userService.updateUser(pending.dto.id, { password: hashedPassword });
+  this.pendingSignups.delete(phone);
+  return { message: 'Mot de passe réinitialisé avec succès.' };
+}
+
 }

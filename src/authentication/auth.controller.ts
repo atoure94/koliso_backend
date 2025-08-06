@@ -59,4 +59,18 @@ async verifyOtp(@Body() body: { phone: string, otp: string }) {
 async resendOtp(@Body() body: { phone: string }) {
   return this.authService.resendOtp(body.phone);
 }
+
+@Post('forgot-password')
+@ApiOperation({ summary: 'Demande de réinitialisation du mot de passe (envoi OTP)' })
+@ApiBody({ schema: { example: { phone: '33612345678' } } })
+async forgotPassword(@Body() body: { phone: string }) {
+  return this.authService.forgotPassword(body.phone);
+}
+
+@Post('reset-password')
+@ApiOperation({ summary: 'Réinitialisation du mot de passe avec OTP' })
+@ApiBody({ schema: { example: { phone: '33612345678', otp: '123456', newPassword: 'newpass123' } } })
+async resetPassword(@Body() body: { phone: string, otp: string, newPassword: string }) {
+  return this.authService.resetPassword(body.phone, body.otp, body.newPassword);
+}
 }
